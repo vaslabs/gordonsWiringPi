@@ -46,6 +46,7 @@ extern int wiringPiDebug ;
 // External functions I can't be bothered creating a separate .h file for:
 
 extern void doReadall    (void) ;
+extern void doReadallJSON(void) ;
 extern void doPins       (void) ;
 
 #ifndef TRUE
@@ -64,7 +65,7 @@ char *usage = "Usage: gpio -v\n"
               "       gpio [-g|-1] [-x extension:params] ...\n"
               "       gpio [-p] <read/write/wb> ...\n"
               "       gpio <read/write/aread/awritewb/pwm/clock/mode> ...\n"
-	      "       gpio readall/reset\n"
+	      "       gpio readall/readalljson/reset\n"
 	      "       gpio unexportall/exports\n"
 	      "       gpio export/edge/unexport ...\n"
 	      "       gpio wfi <pin> <mode>\n"
@@ -1317,6 +1318,7 @@ int main (int argc, char *argv [])
   else if (strcasecmp (argv [1], "drive"    ) == 0) doPadDrive   (argc, argv) ;
   else if (strcasecmp (argv [1], "usbp"     ) == 0) doUsbP       (argc, argv) ;
   else if (strcasecmp (argv [1], "readall"  ) == 0) doReadall    () ;
+  else if (strcasecmp (argv [1], "readalljson") == 0) doReadallJSON() ;
   else if (strcasecmp (argv [1], "nreadall" ) == 0) doReadall    () ;
   else if (strcasecmp (argv [1], "pins"     ) == 0) doPins       () ;
   else if (strcasecmp (argv [1], "i2cdetect") == 0) doI2Cdetect  (argc, argv) ;

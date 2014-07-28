@@ -238,7 +238,6 @@ void cmReadall (void)
   printf ("+-----+------+-------+      +-----+------+-------+\n") ;
 }
 
-
 /*
  * abReadall:
  *	Read all the pins on the model A or B.
@@ -275,6 +274,8 @@ void abReadall (int model, int rev)
   printf (" | BCM | wPi |   Name  | Mode | V | Physical | V | Mode | Name    | wPi | BCM |\n") ;
   printf (" +-----+-----+---------+------+---+-Model %s-+---+------+---------+-----+-----+\n", type) ;
 }
+
+
 
 
 /*
@@ -318,4 +319,169 @@ void doReadall (void)
     cmReadall () ;
   else
     printf ("Oops - unable to determine board type... model: %d\n", model) ;
+}
+
+
+
+
+//output a json string for a pin and its next pin
+/*| BCM | wPi |   Name  | Mode | Val| Physical |Val | Mode | Name    | wPi | BCM |
+[
+    {
+        BCM:X,
+        wPi:X,
+        Name:X,
+        Mode:X,
+        Val:X,
+        Physical:X
+
+    },
+    {
+        BCM:X,
+        wPi:X,
+        Name:X,
+        Mode:X,
+        Val:X,
+        Physical:X
+    }
+]
+*/
+static void readAllPhysJSON(int physPin) {
+
+    int pin ;
+    printf("[\n");
+    if (physPinToGpio (physPin) == -1)
+    printf ("{\"BCM\":null, \"wPi\":null,\n") ;
+    else
+    printf (" {\"BCM\":%d,  \"wPi\":%3d,", physPinToGpio (physPin), physToWpi [physPin]) ;
+
+    printf (" \"Name\":\"%s\",", physNames [physPin]) ;
+
+    if (physToWpi [physPin] == -1)
+    printf (" \"Mode\": null, \"Val\":null, ") ;
+    else
+    {
+        /**/ if (wpMode == WPI_MODE_GPIO)
+                 pin = physPinToGpio (physPin) ;
+            else if (wpMode == WPI_MODE_PHYS)
+                    pin = physPin ;
+                 else
+                    pin = physToWpi [physPin] ;
+
+        printf (" \"Mode\": \"%s\",", alts [getAlt (pin)]) ;
+        printf (" \"Val\": %d,", digitalRead (pin)) ;
+    }
+
+    // Pin numbers:
+
+    printf (" \"Physical\": %d},", physPin) ;
+    ++physPin ;
+    printf ("{\"Physical\": %d,", physPin) ;
+
+    // Same, reversed
+
+    if (physToWpi [physPin] == -1)
+    printf ("\"Val\":null, \"Mode\":null,\n") ;
+    else
+    {
+        if (wpMode == WPI_MODE_GPIO)
+            pin = physPinToGpio (physPin) ;
+        else if (wpMode == WPI_MODE_PHYS)
+            pin = physPin ;
+            else
+                pin = physToWpi [physPin] ;
+
+        printf (" \"Val\": %d,", digitalRead (pin)) ;
+        printf (" \"Mode\": \"%s\",\n", alts [getAlt (pin)]) ;
+    }
+
+    printf (" \"Name\": \"%s\",", physNames [physPin]) ;
+
+    if (physToWpi[physPin] == -1)
+        printf (" \"wPi\":null, \"BCM\":null}\n") ;
+    else
+        printf (" \"wPi\": %d, \"BCM\":%d}\n", physToWpi [physPin], physPinToGpio (physPin)) ;
+
+    printf ("]\n") ;
+}
+
+
+/*
+ * abReadallJSON:
+ *	Read all the pins on the model A or B and do JSON output.
+ *********************************************************************************
+ */
+
+void abReadallJSON (int model, int rev)
+{
+    int pin ;
+    char *type ;
+
+    if (model == PI_MODEL_A)
+        type = " A" ;
+    else
+        if (rev == PI_VERSION_2)
+            type = "B2" ;
+        else
+            type = "B1" ;
+
+    printf("[\n");
+    for (pin = 1 ; pin <= 26 ; pin += 2) {
+        readAllPhysJSON (pin) ;
+    if (pin < 25)
+        printf(",\n");
+    }
+
+    if (rev == PI_VERSION_2) // B version 2
+    {
+        printf(",\n");
+
+        for (pin = 51 ; pin <= 54 ; pin += 2) {
+            readAllPhysJSON (pin) ;
+            if (pin < 53)
+                printf(",\n");
+        }
+    }
+
+  printf("]\n");
+}
+
+
+
+void bPlusReadallJSON (void)
+{
+  int pin ;
+
+  printf ("[\n") ;
+  for (pin = 1 ; pin <= 40 ; pin += 2) {
+    readAllPhysJSON (pin) ;
+    if (pin < 40)
+        printf(",\n");
+  }
+  printf ("]\n") ;
+  
+}
+
+
+
+void doReadallJSON (void)
+{
+  int model, rev, mem, maker, overVolted ;
+
+  if (wiringPiNodes != NULL)	// External readall
+  {
+    doReadallExternal () ;
+    return ;
+  }
+
+  piBoardId (&model, &rev, &mem, &maker, &overVolted) ;
+
+  /**/ if ((model == PI_MODEL_A) || (model == PI_MODEL_B))
+    abReadallJSON (model, rev) ;
+  else if (model == PI_MODEL_BP)
+    bPlusReadallJSON () ;
+  else if (model == PI_MODEL_CM)
+    printf("{}\n") ;
+  else
+    printf ("{\"error\":\"Oops - unable to determine board type... model: %d\"}\n", model) ;
 }
