@@ -428,8 +428,8 @@ void abReadallJSON (int model, int rev)
     printf("[\n");
     for (pin = 1 ; pin <= 26 ; pin += 2) {
         readAllPhysJSON (pin) ;
-    if (pin < 25)
-        printf(",\n");
+        if (pin < 25)
+            printf(",\n");
     }
 
     if (rev == PI_VERSION_2) // B version 2
@@ -455,7 +455,7 @@ void bPlusReadallJSON (void)
   printf ("[\n") ;
   for (pin = 1 ; pin <= 40 ; pin += 2) {
     readAllPhysJSON (pin) ;
-    if (pin < 40)
+    if (pin < 39)
         printf(",\n");
   }
   printf ("]\n") ;
