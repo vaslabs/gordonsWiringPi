@@ -20,9 +20,11 @@ used by the pi-web-agent API.
 The pi-web-agent team does not guarantee that this version of wiringPi will maintain
 the same functionality as the official Drogon release outside of the pi-web-agent.
 
-If you want this project to use it on the command line or purposes outside the pi-web-agent
+If you want to use this project via the command line or purposes outside the pi-web-agent
 you should get it from the official Drogon repository. The pi-web-agent however, is not compatible with
 the official wiringPi since it lacks json format results.
+
+Every effort is being made to keep this project up to date with the original.
 ----------------------------------------------------------------------------------------
 
 
