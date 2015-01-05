@@ -1,4 +1,4 @@
 *.o
-gpio
+gpio/gpio
 *~
 *.so.2.0
