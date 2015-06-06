@@ -2,7 +2,7 @@
  * gpio.c:
  *	Swiss-Army-Knife, Set-UID command-line interface to the Raspberry
  *	Pi's GPIO.
- *	Copyright (c) 2012-2014 Gordon Henderson
+ *	Copyright (c) 2012-2015 Gordon Henderson
  ***********************************************************************
  * This file is part of wiringPi:
  *	https://projects.drogon.net/raspberry-pi/wiringpi/
@@ -35,11 +35,12 @@
 #include <sys/stat.h>
 
 #include <wiringPi.h>
+#include <wpiExtensions.h>
 
 #include <gertboard.h>
 #include <piFace.h>
 
-#include "extensions.h"
+#include "version.h"
 
 extern int wiringPiDebug ;
 
@@ -54,7 +55,6 @@ extern void doPins       (void) ;
 #  define	FALSE	(1==2)
 #endif
 
-#define	VERSION			"2.21"
 #define	PI_USB_POWER_CONTROL	38
 #define	I2CDETECT		"/usr/sbin/i2cdetect"
 
@@ -74,6 +74,7 @@ char *usage = "Usage: gpio -v\n"
 	      "       gpio pwmr <range> \n"
 	      "       gpio pwmc <divider> \n"
 	      "       gpio load spi/i2c\n"
+	      "       gpio unload spi/i2c\n"
 	      "       gpio i2cd/i2cdetect\n"
 	      "       gpio usbp high/low\n"
 	      "       gpio gbr <channel>\n"
@@ -116,12 +117,9 @@ static void changeOwner (char *cmd, char *file)
   if (chown (file, uid, gid) != 0)
   {
     if (errno == ENOENT)	// Warn that it's not there
-      fprintf (stderr, "%s: Warning: File not present: %s\n", cmd, file) ;
+      fprintf (stderr, "%s: Warning (not an error): File not present: %s\n", cmd, file) ;
     else
-    {
-      fprintf (stderr, "%s: Unable to change ownership of %s: %s\n", cmd, file, strerror (errno)) ;
-      exit (1) ;
-    }
+      fprintf (stderr, "%s: Warning (not an error): Unable to change ownership of %s: %s\n", cmd, file, strerror (errno)) ;
   }
 }
 
@@ -168,7 +166,7 @@ static int moduleLoaded (char *modName)
 
 static void _doLoadUsage (char *argv [])
 {
-  fprintf (stderr, "Usage: %s load <spi/i2c> [SPI bufferSize in KB | I2C baudrate in Kb/sec]\n", argv [0]) ;
+  fprintf (stderr, "Usage: %s load <spi/i2c> [I2C baudrate in Kb/sec]\n", argv [0]) ;
   exit (1) ;
 }
 
@@ -191,7 +189,10 @@ static void doLoad (int argc, char *argv [])
     file1  = "/dev/spidev0.0" ;
     file2  = "/dev/spidev0.1" ;
     if (argc == 4)
-      sprintf (args1, " bufsiz=%d", atoi (argv [3]) * 1024) ;
+    {
+      fprintf (stderr, "%s: Unable to set the buffer size now. Load aborted. Please see the man page.\n", argv [0]) ;
+      exit (1) ;
+    }
     else if (argc > 4)
       _doLoadUsage (argv) ;
   }
@@ -211,13 +212,13 @@ static void doLoad (int argc, char *argv [])
 
   if (!moduleLoaded (module1))
   {
-    sprintf (cmd, "modprobe %s%s", module1, args1) ;
+    sprintf (cmd, "/sbin/modprobe %s%s", module1, args1) ;
     system (cmd) ;
   }
 
   if (!moduleLoaded (module2))
   {
-    sprintf (cmd, "modprobe %s%s", module2, args2) ;
+    sprintf (cmd, "/sbin/modprobe %s%s", module2, args2) ;
     system (cmd) ;
   }
 
@@ -231,6 +232,53 @@ static void doLoad (int argc, char *argv [])
 
   changeOwner (argv [0], file1) ;
   changeOwner (argv [0], file2) ;
+}
+
+
+/*
+ * doUnLoad:
+ *	Un-Load either the spi or i2c modules and change device ownerships, etc.
+ *********************************************************************************
+ */
+
+static void _doUnLoadUsage (char *argv [])
+{
+  fprintf (stderr, "Usage: %s unload <spi/i2c>\n", argv [0]) ;
+  exit (1) ;
+}
+
+static void doUnLoad (int argc, char *argv [])
+{
+  char *module1, *module2 ;
+  char cmd [80] ;
+
+  if (argc != 3)
+    _doUnLoadUsage (argv) ;
+
+  /**/ if (strcasecmp (argv [2], "spi") == 0)
+  {
+    module1 = "spidev" ;
+    module2 = "spi_bcm2708" ;
+  }
+  else if (strcasecmp (argv [2], "i2c") == 0)
+  {
+    module1 = "i2c_dev" ;
+    module2 = "i2c_bcm2708" ;
+  }
+  else
+    _doUnLoadUsage (argv) ;
+
+  if (moduleLoaded (module1))
+  {
+    sprintf (cmd, "/sbin/rmmod %s", module1) ;
+    system (cmd) ;
+  }
+
+  if (moduleLoaded (module2))
+  {
+    sprintf (cmd, "/sbin/rmmod %s", module2) ;
+    system (cmd) ;
+  }
 }
 
 
@@ -387,19 +435,23 @@ void doExport (int argc, char *argv [])
     exit (1) ;
   }
 
-  /**/ if ((strcasecmp (mode, "in")  == 0) || (strcasecmp (mode, "input")  == 0))
+  /**/ if ((strcasecmp (mode, "in")   == 0) || (strcasecmp (mode, "input")  == 0))
     fprintf (fd, "in\n") ;
-  else if ((strcasecmp (mode, "out") == 0) || (strcasecmp (mode, "output") == 0))
+  else if ((strcasecmp (mode, "out")  == 0) || (strcasecmp (mode, "output") == 0))
     fprintf (fd, "out\n") ;
+  else if ((strcasecmp (mode, "high") == 0) || (strcasecmp (mode, "up")     == 0))
+    fprintf (fd, "high\n") ;
+  else if ((strcasecmp (mode, "low")  == 0) || (strcasecmp (mode, "down")   == 0))
+    fprintf (fd, "low\n") ;
   else
   {
-    fprintf (stderr, "%s: Invalid mode: %s. Should be in or out\n", argv [1], mode) ;
+    fprintf (stderr, "%s: Invalid mode: %s. Should be in, out, high or low\n", argv [1], mode) ;
     exit (1) ;
   }
 
   fclose (fd) ;
 
-// Change ownership so the current user can actually use it!
+// Change ownership so the current user can actually use it
 
   sprintf (fName, "/sys/class/gpio/gpio%d/value", pin) ;
   changeOwner (argv [0], fName) ;
@@ -588,24 +640,6 @@ void doUnexportall (char *progName)
 
 
 /*
- * doResetExternal:
- *	Load readallExternal, we try to do this with an external device.
- *********************************************************************************
- */
-
-static void doResetExternal (void)
-{
-  int pin ;
-
-  for (pin = wiringPiNodes->pinBase ; pin <= wiringPiNodes->pinMax ; ++pin)
-  {
-    pinMode         (pin, INPUT) ;
-    pullUpDnControl (pin, PUD_OFF) ;
-  }
-}
-
-
-/*
  * doReset:
  *	Reset the GPIO pins - as much as we can do
  *********************************************************************************
@@ -613,45 +647,9 @@ static void doResetExternal (void)
 
 static void doReset (char *progName)
 {
-  int model, rev, mem, maker, overVolted ;
-  int pin, endPin ;
-
-  printf ("GPIO Reset is dangerous!\n") ;
-  printf (" - Do Not rely on this to do anything sensible!\n") ;
-
-  if (wiringPiNodes != NULL)	// External
-  {
-    doResetExternal () ;
-    return ;
-  }
-
-  piBoardId (&model, &rev, &mem, &maker, &overVolted) ;
-
-  /**/ if ((model == PI_MODEL_A) || (model == PI_MODEL_B))
-    endPin = 16 ;
-  else if (model == PI_MODEL_BP)
-    endPin = 39 ;
-  else if (model == PI_MODEL_CM)
-  {
-    printf (" - Don't know how to reset a comput module:\n") ;
-    printf ("   Write a shell-script to reset the pins to the state you need.\n") ;
-    return ;
-  }
-  else
-  {
-    printf ("Oops - unable to determine board type... model: %d\n", model) ;
-    return ;
-  }
-
-  for (pin = 0 ; pin <= endPin ; ++pin)
-  {
-    if (wpiPinToGpio (pin) == -1)
-      continue ;
-
-    digitalWrite    (pin, LOW) ;
-    pinMode         (pin, INPUT) ;
-    pullUpDnControl (pin, PUD_OFF) ;
-  }
+  printf ("GPIO Reset is dangerous and has been removed from the gpio command.\n") ;
+  printf (" - Please write a shell-script to reset the GPIO pins into the state\n") ;
+  printf ("   that you need them in for your applications.\n") ;
 }
 
 
@@ -687,9 +685,6 @@ void doMode (int argc, char *argv [])
   else if (strcasecmp (mode, "down")    == 0) pullUpDnControl (pin, PUD_DOWN) ;
   else if (strcasecmp (mode, "tri")     == 0) pullUpDnControl (pin, PUD_OFF) ;
   else if (strcasecmp (mode, "off")     == 0) pullUpDnControl (pin, PUD_OFF) ;
-
-// Undocumented
-
   else if (strcasecmp (mode, "alt0")    == 0) pinModeAlt (pin, 0b100) ;
   else if (strcasecmp (mode, "alt1")    == 0) pinModeAlt (pin, 0b101) ;
   else if (strcasecmp (mode, "alt2")    == 0) pinModeAlt (pin, 0b110) ;
@@ -1184,7 +1179,7 @@ int main (int argc, char *argv [])
   if (strcmp (argv [1], "-v") == 0)
   {
     printf ("gpio version: %s\n", VERSION) ;
-    printf ("Copyright (c) 2012-2014 Gordon Henderson\n") ;
+    printf ("Copyright (c) 2012-2015 Gordon Henderson\n") ;
     printf ("This is free software with ABSOLUTELY NO WARRANTY.\n") ;
     printf ("For details type: %s -warranty\n", argv [0]) ;
     printf ("\n") ;
@@ -1207,7 +1202,7 @@ int main (int argc, char *argv [])
   if (strcasecmp (argv [1], "-warranty") == 0)
   {
     printf ("gpio version: %s\n", VERSION) ;
-    printf ("Copyright (c) 2012-2014 Gordon Henderson\n") ;
+    printf ("Copyright (c) 2012-2015 Gordon Henderson\n") ;
     printf ("\n") ;
     printf ("    This program is free software; you can redistribute it and/or modify\n") ;
     printf ("    it under the terms of the GNU Leser General Public License as published\n") ;
@@ -1241,7 +1236,8 @@ int main (int argc, char *argv [])
 
 // Check for load command:
 
-  if (strcasecmp (argv [1], "load" ) == 0)	{ doLoad     (argc, argv) ; return 0 ; }
+  if (strcasecmp (argv [1], "load"   ) == 0)	{ doLoad   (argc, argv) ; return 0 ; }
+  if (strcasecmp (argv [1], "unload" ) == 0)	{ doUnLoad (argc, argv) ; return 0 ; }
 
 // Gertboard commands
 
@@ -1302,7 +1298,7 @@ int main (int argc, char *argv [])
       exit (EXIT_FAILURE) ;
     }
 
-    if (!doExtension (argv [0], argv [2]))	// Prints its own error messages
+    if (!loadWPiExtension (argv [0], argv [2], TRUE))	// Prints its own error messages
       exit (EXIT_FAILURE) ;
 
     for (i = 3 ; i < argc ; ++i)
