@@ -491,7 +491,7 @@ void doReadallJSON (void)
 
   /**/ if ((model == PI_MODEL_A) || (model == PI_MODEL_B))
     abReadallJSON (model, rev) ;
-  else if ((model == PI_MODEL_BP) || (model == PI_MODEL_AP))
+  else if ((model == PI_MODEL_BP) || (model == PI_MODEL_AP) || (model == PI_MODEL_2))
     bPlusReadallJSON () ;
   else if (model == PI_MODEL_CM)
     printf("{}\n") ;
